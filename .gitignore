@@ -1,0 +1,6 @@
+# Base locale et fichiers de travail
+*.db
+*.db-shm
+*.db-wal
+__pycache__/
+*.pyc
