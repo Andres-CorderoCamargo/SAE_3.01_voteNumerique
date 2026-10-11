@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package vote;
+
+option java_package = "com.g3.vote.proto";
+option java_multiple_files = true;
+
+
+// Requête vide pour demander la clé publique
+message PublicKeyRequest {}
+
+
+message PublicKeyResponse {
+  string public_key = 1;
+}
+
+
+
+// envoi du bulletin chiffrée (la fonction pour le chiffrement doit etre deja faite )
+//utilisation de bytes pour eviter des erreur si on utilisait une string
+message VoteRequest {
+  string electeur_id = 1;
+  bytes vote_chiffre = 2;
+}
+
+// Réponse de l'urne suite à un vote
+//message c'est confirmation ou erreur  pas pour le client mais pour le debug uo autre
+//is late   ca c'est pour le client on lui envoit true et l'app client affiche elle meme un message
+message VoteResponse {
+  bool success = 1;
+  string message = 2;
+  bool is_late = 3;
+}
+
+
+// Requête pour demander le résultat du vote
+message ResultRequest {}
+
+// Résultat global envoyé aux électeurs
+// Résultat déchiffré
+message ResultResponse {
+  bool election_terminee = 1;
+  string resultat = 2;
+  string message = 3;
+}
+
+
+// Message envoyé au scrutateur contenant l'ensemble des bulletins chiffrés pour dépouillement
+message EncryptedResultsToScrutateur {
+  repeated bytes votes_chiffres = 1;
+}
+
+
+// Mot de passe chiffré ou haché
+message RegisterRequest {
+  string electeur_id = 1;
+  string login = 2;
+  bytes password_chiffre = 3;
+}
+
+// Message de confirmation ou d'erreur (ex: login déjà pris)
+message RegisterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+
+// Enveloppe globale pour toutes les requêtes du client
+message ClientMessage {
+  oneof payload {
+    PublicKeyRequest public_key_request = 1;
+    RegisterRequest register_request = 2;
+    VoteRequest vote_request = 3;
+    ResultRequest result_request = 4;
+  }
+}

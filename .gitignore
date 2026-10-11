@@ -5,3 +5,8 @@
 __pycache__/
 *.pyc
 .idea/
+target/
+*.iml
+Thumbs.db
+.DS_Store
+*.log
