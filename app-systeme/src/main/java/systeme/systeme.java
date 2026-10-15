@@ -5,9 +5,14 @@ import com.g3.vote.proto.*;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class systeme {
+
+    private static final ConcurrentHashMap<String, InfosStockageElecteur> baseElecteursTemporaire = new ConcurrentHashMap<>();
     public static void main(String[] args) {
+
+
         int port = 8080;
         System.out.println("[SERVEUR] Démarrage de l'urne sur le port " + port + "...");
 
@@ -41,11 +46,12 @@ public class systeme {
         @Override
         public void run() {
             try (Socket s = socket) {
-                // 1. Lecture de l'enveloppe globale envoyée par le client
-                ClientMessage clientMsg = ClientMessage.parseDelimitedFrom(s.getInputStream());
+                ClientMessage clientMsg;
 
-                if (clientMsg != null) {
-                    // 2. Routage selon le type de requête reçue grâce au oneof
+                // Boucle pour écouter tant que le client envoie des messages sur la même socket
+                while ((clientMsg = ClientMessage.parseDelimitedFrom(s.getInputStream())) != null) {
+
+                    // Routage selon le type de requête reçue grâce au oneof
                     if (clientMsg.hasRegisterRequest()) {
                         traiterInscription(clientMsg.getRegisterRequest(), s);
 
@@ -59,8 +65,11 @@ public class systeme {
                         System.out.println("[SERVEUR] Type de message inconnu ou non géré.");
                     }
                 }
+
+                System.out.println("[SERVEUR] L'électeur s'est déconnecté proprement : " + s.getRemoteSocketAddress());
+
             } catch (IOException e) {
-                System.err.println("[SERVEUR] Erreur réseau : " + e.getMessage());
+                System.err.println("[SERVEUR] Erreur réseau ou déconnexion brusque : " + e.getMessage());
             }
         }
     }
@@ -68,9 +77,36 @@ public class systeme {
     private static void traiterInscription(RegisterRequest request, Socket socket) throws IOException {
         System.out.println("[SERVEUR] Traitement inscription pour : " + request.getLogin());
 
-        // vérifications
-        boolean success = !request.getLogin().isEmpty();
-        String message = success ? "Inscription réussie" : "Échec de l'inscription";
+        String electeurId = request.getElecteurId();
+        String login = request.getLogin();
+
+        String mdpChiffreStr = request.getPasswordChiffre().toStringUtf8();
+
+        boolean success;
+        String message;
+
+        // Vérifications de base
+        if (electeurId == null || electeurId.isEmpty() || login == null || login.isEmpty()) {
+            success = false;
+            message = "Échec : L'identifiant et le login ne peuvent pas être vides.";
+        }
+        // Vérification si l'électeur existe déjà
+        else if (baseElecteursTemporaire.containsKey(electeurId)) {
+            success = false;
+            message = "Échec : L'électeur avec l'ID " + electeurId + " est déjà inscrit.";
+        }
+        else {
+            // 3. Enregistrement temporaire en mémoire
+            InfosStockageElecteur infos = new InfosStockageElecteur(electeurId, login, mdpChiffreStr);
+            baseElecteursTemporaire.put(electeurId, infos);
+
+            success = true;
+            message = "Inscription réussie. Contenu de la base : " + baseElecteursTemporaire.toString();
+
+            System.out.println("[SERVEUR - MÉMOIRE] Électeur ajouté. Total inscrits : " + baseElecteursTemporaire.size());
+        }
+
+        System.out.println("[SERVEUR] Message renvoyé : " + message);
 
         // Construction et envoi de la réponse
         RegisterResponse response = RegisterResponse.newBuilder()
@@ -78,7 +114,9 @@ public class systeme {
                 .setMessage(message)
                 .build();
 
+
         response.writeDelimitedTo(socket.getOutputStream());
+        socket.getOutputStream().flush();
     }
 
     private static void traiterVote(VoteRequest request, Socket socket) throws IOException {
